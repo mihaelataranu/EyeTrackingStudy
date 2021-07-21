@@ -1,0 +1,49 @@
+---
+title: "visualisations"
+author: "Aske Svane Qvist"
+date: "15 May 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages
+```{r}
+# I use pacman to import packages
+library(pacman)
+p_load(tidyverse)
+
+```
+
+## Import all data
+```{r}
+# Importing the collected data from the gathered_files folder.
+data <- read_csv("../data/gathered_files/dataAll_export.csv")
+
+```
+
+## Function to subset data
+The Function will subset the data according to the first letter of the 'behavior'. If one wishes to keep all rows where the behavior starts with "l", that is the default parameter. This can be changed to u, A or B.
+```{r}
+# Defining the function
+SubsetByLetter <- function(d, behavior_first_letter = "l"){
+  
+  # Extract the first letter from 'behavior' and store it in new column
+  d$letter <- substring(d$behavior, 1, 1)
+  
+  # select only rows containing defined letter and drop the new column 'letter'
+  d <- d[d$letter == behavior_first_letter,-18]
+  
+  # Return the subset.
+  return(d)
+}
+
+# Apply the function to the data. Now, the data only contains rows where the behavior starts with "l".
+data = SubsetByLetter(data)
+
+```
+
+
+

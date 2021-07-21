@@ -1,0 +1,529 @@
+---
+title: "visualisations"
+author: "Aske Svane Qvist"
+date: "15 May 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Packages
+```{r}
+# I use pacman to import packages
+library(pacman)
+p_load(tidyverse, lme4, lmerTest, stringr)
+
+```
+
+### Import all data
+```{r}
+# Importing the collected data from the gathered_files folder.
+dataAll <- read_csv("../data/gathered_files/dataAll_export.csv")
+
+```
+
+### Function to subset data
+The Function will subset the data according to the first letter of the 'behavior'. If one wishes to keep all rows where the behavior starts with "l", that is the default parameter. This can be changed to u, A or B.
+```{r}
+# Defining the function
+SubsetByLetter <- function(d, behavior_first_letter = "l"){
+  
+  # Extract the first letter from 'behavior' and store it in new column
+  d$letter <- substring(d$behavior, 1, 1)
+  
+  # select only rows containing defined letter and drop the new column 'letter'
+  d <- d[d$letter == behavior_first_letter,-18]
+  
+  # Return the subset.
+  return(d)
+}
+
+# Apply the function to the data. Now, the data only contains rows where the behavior starts with "l".
+data = SubsetByLetter(dataAll)
+
+# Change variable to factors
+data <- data %>% mutate(
+  behavior = as.factor(behavior),
+  Category = as.factor(behavioral_category), 
+  participantID = as.factor(participantID),
+  block = as.factor(block)
+)
+
+```
+
+## Visualizing fixations
+
+### (Plot 1) The bricks first looked at?
+The bricks that are most frequently looked at first in block 1 are the yellow round
+bricks. Overall ALL builds, the 3 orange bricks were looked at first most often. By
+BUILD3 there is little difference in which bricks are looked at first.
+```{r}
+
+# Make lists of unique ID's and blocks to enable looping over each ID and block one by one.
+ID_list <- unique(data$participantID)
+
+# Create empty 'container' to which the gathered data will be appended.
+vis1 <- tibble()
+
+# Loop over every ID
+for (ID_idx in 1:length(ID_list)){
+
+  # Get iD one by one
+  ID <- ID_list[ID_idx]
+  
+  # get data from the current ID
+  sub <- data %>% filter(participantID == ID)
+  
+  # Get the first fixation from each block 
+  sub <- sub[!duplicated(sub$block),]
+
+  # Append first fixation for each block to the df outside the loop
+  if (nrow(vis1) == 0){
+    vis1 <- sub}
+  else {
+    vis1 <- rbind(vis1, sub)}
+
+}
+
+# Create summary of the data to be plotted
+vis1 <- vis1 %>% group_by(block, Category) %>% summarise(
+  freq = n()
+)
+
+# Create ggplot
+ggplot(vis1,aes(x=Category, y = freq, fill=Category)) + 
+  
+  # Place the bars next to each other and seperate by block number + choose black/whote theme
+  geom_col(position="dodge", color = "black") + facet_wrap(~ block) + theme_bw() +
+
+  # Change colors of the bars to correspond to the brick colors
+  scale_fill_manual("Category", values = c(
+    "1transparent" = "white", 
+    "2DarkRed" = "darkred", 
+    "3Orange" = "orange", 
+    "4Red" = "red", 
+    "4YellowRound" = "yellow")) +
+  
+  # Change layout
+  theme(
+    # Remove grids behind the bars
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    # Draw black line around the plot
+    axis.line = element_line(colour = "black")) +
+  
+  # Add labels
+  labs(title = "Plot 1", subtitle = "The frequency of the first brick looked at by category") + 
+  xlab("") + ylab("Frequency")
+
+# save plot
+ggsave("../plots/plot1.png", width = 7, height = 4)
+
+```
+
+
+### (Plot 2) How many times each brick has been looked at?
+Plot the count of fixations on each brick for each block. 
+The bar is an average across participants. Errorbars indicate the standard error.
+```{r}
+
+# Drop rows with the categories Base, Configuration and Minibase
+vis2 <-data[!(data$Category=='Base' | data$Category=='Configuration' | data$Category=='Minibase'),]
+
+# Prepare data
+vis2 <- vis2 %>% 
+  
+  # get the number of fixations on each brick by participant - and change it to numeric
+  group_by(participantID, block, Category) %>% 
+  summarise(freq = n()) %>% 
+  mutate(freq = as.numeric(freq)) %>% 
+  
+  # Calculate the mean and se for each category in each block
+  group_by(block, Category) %>%
+  summarise(MEAN = mean(freq),  # calculates the mean of each group
+            SE = sd(freq)/sqrt(n())) # calculates the standard error of each group
+  
+
+# Run the plot
+ggplot(vis2, aes(x = Category, y = MEAN, fill = Category)) +
+  geom_col(position="dodge", color = "black") + 
+  scale_fill_manual("Category", values = c(
+    "1transparent" = "white", 
+    "2DarkRed" = "darkred", 
+    "3Orange" = "orange", 
+    "4Red" = "red", 
+    "4YellowRound" = "yellow")) +
+  facet_wrap(~ block) + 
+  theme_bw() +
+  geom_errorbar(aes(ymin=MEAN-SE, ymax=MEAN+SE), size=.3, width=.2, position=position_dodge(.9)) + 
+  
+  # Change layout
+  theme(
+    # Remove grids behind the bars
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    # Draw black line around the plot
+    axis.line = element_line(colour = "black")) +
+  
+  # Add labels
+  labs(title = "Plot 2", subtitle = "The frequency of fixations by category across participants") + 
+  xlab("") + ylab("Number of fixations")
+
+# save plot
+ggsave("../plots/plot2.png", width = 7, height = 4)
+
+```
+
+
+### (Plot 3) Total fixation duration
+Plot the total fixation duration on each brick category by block. 
+This is to comare with plot 2.
+```{r}
+# Drop rows with the categories Base, Configuration and Minibase
+vis3 <-data[!(data$Category=='Base' | data$Category=='Configuration' | data$Category=='Minibase'),]
+
+# Prepare data
+vis3 <- vis3 %>% 
+  
+  # get the number of fixations on each brick by participant - and change it to numeric
+  group_by(participantID, block, Category) %>% 
+  summarise(total_duration = sum(duration_ms)) %>% 
+  mutate(total_duration = as.numeric(total_duration)) %>% 
+  
+  # Calculate the mean and se for each category in each block
+  group_by(block, Category) %>%
+  summarise(MEAN = mean(total_duration),  # calculates the mean of each group
+            SE = sd(total_duration)/sqrt(n())) # calculates the standard error of each group
+  
+# Run the plot
+ggplot(vis3, aes(x = Category, y = MEAN, fill = Category)) +
+  geom_col(position="dodge", color = "black") + 
+  scale_fill_manual("Category", values = c(
+    "1transparent" = "white", 
+    "2DarkRed" = "darkred", 
+    "3Orange" = "orange", 
+    "4Red" = "red", 
+    "4YellowRound" = "yellow")) +
+  facet_wrap(~ block) + 
+  theme_bw() +
+  geom_errorbar(aes(ymin=MEAN-SE, ymax=MEAN+SE), size=.3, width=.2, position=position_dodge(.9)) + 
+  
+  # Change layout
+  theme(
+    # Remove grids behind the bars
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    # Draw black line around the plot
+    axis.line = element_line(colour = "black")) +
+  
+  # Add labels
+  labs(title = "Plot 3", subtitle = "The total fixartion duration on the brick across the three blocks") + 
+  xlab("") + ylab("Total fixation duration (ms)")
+
+# save plot
+ggsave("../plots/plot3.png", width = 7, height = 4)
+
+```
+
+
+### (Plot 4) mean fixation duration
+On average, how long time do the participants spent looking at each brick?
+```{r}
+# Drop rows with the categories Base, Configuration and Minibase
+vis4 <-data[!(data$Category=='Base' | data$Category=='Configuration' | data$Category=='Minibase'),]
+
+# Prepare data
+vis4 <- vis4 %>% 
+  
+  # get the number of fixations on each brick by participant - and change it to numeric
+  group_by(participantID, block, Category) %>% 
+  summarise(mean_duration = mean(duration_ms)) %>% 
+  mutate(mean_duration = as.numeric(mean_duration)) %>% 
+  
+  # Calculate the mean and se for each category in each block
+  group_by(block, Category) %>%
+  summarise(MEAN = mean(mean_duration),  # calculates the mean of each group
+            SE = sd(mean_duration)/sqrt(n())) # calculates the standard error of each group
+  
+# Run the plot
+ggplot(vis4, aes(x = Category, y = MEAN, fill = Category)) +
+  geom_col(position="dodge", color = "black") + 
+  scale_fill_manual("Category", values = c(
+    "1transparent" = "white", 
+    "2DarkRed" = "darkred", 
+    "3Orange" = "orange", 
+    "4Red" = "red", 
+    "4YellowRound" = "yellow")) +
+  facet_wrap(~ block) + 
+  theme_bw() +
+  geom_errorbar(aes(ymin=MEAN-SE, ymax=MEAN+SE), size=.3, width=.2, position=position_dodge(.9)) + 
+  
+  # Change layout
+  theme(
+    # Remove grids behind the bars
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    # Draw black line around the plot
+    axis.line = element_line(colour = "black")) +
+  
+  # Add labels
+  labs(title = "Plot 4", subtitle = "The mean fixartion duration on the bricks across the three blocks") + 
+  xlab("") + ylab("Mean fixation duration (ms)")
+
+# save plot
+ggsave("../plots/plot4.png", width = 7, height = 4)
+
+```
+
+
+
+## Visualizing interactions
+We are no longer visualising fixations but 'used' meaning the interaction with the bricks
+
+
+### (Plot 5) Most used bricks 
+Plot the count of interactions with each brick for each block. 
+The bar is an average across participants. Errorbars indicate the standard error.
+```{r}
+# Apply the homemade function to the data. 
+# Now, the data only contains rows where the behavior starts with "U".
+data = SubsetByLetter(dataAll, "u")
+
+# Change variable to factors
+data <- data %>% mutate(
+  behavior = as.factor(behavior),
+  Category = as.factor(behavioral_category), 
+  participantID = as.factor(participantID),
+  block = as.factor(block)
+)
+
+
+# Drop rows with the categories Base, Configuration and Minibase
+vis5 <-data[!(data$Category=='Base' | data$Category=='Configuration' | data$Category=='Minibase'),]
+
+# Prepare data
+vis5 <- vis5 %>% 
+  
+  # get the number of interactions on each brick by participant - and change it to numeric
+  group_by(participantID, block, Category) %>% 
+  summarise(freq = n()) %>% 
+  mutate(freq = as.numeric(freq)) %>% 
+  
+  # Calculate the mean and se for each category in each block
+  group_by(block, Category) %>%
+  summarise(MEAN = mean(freq),  # calculates the mean of each group
+            SE = sd(freq)/sqrt(n())) # calculates the standard error of each group
+  
+
+# Run the plot
+ggplot(vis5, aes(x = Category, y = MEAN, fill = Category)) +
+  geom_col(position="dodge", color = "black") + 
+  scale_fill_manual("Category", values = c(
+    "1transparent" = "white", 
+    "2DarkRed" = "darkred", 
+    "3Orange" = "orange", 
+    "4Red" = "red", 
+    "4YellowRound" = "yellow")) +
+  facet_wrap(~ block) + 
+  theme_bw() +
+  geom_errorbar(aes(ymin=MEAN-SE, ymax=MEAN+SE), size=.3, width=.2, position=position_dodge(.9)) + 
+  
+  # Change layout
+  theme(
+    # Remove grids behind the bars
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    # Draw black line around the plot
+    axis.line = element_line(colour = "black")) +
+  
+  # Add labels
+  labs(title = "Plot 5", subtitle = "The frequency of interactions with bricks within each category") + 
+  xlab("") + ylab("Number of interactions")
+
+# save plot
+ggsave("../plots/plot5.png", width = 7, height = 4)
+
+```
+
+
+### (Plot 6) Total interaction duration
+For how long does the participants on average interact with each brick category?
+```{r}
+# Drop rows with the categories Base, Configuration and Minibase
+vis6 <-data[!(data$Category=='Base' | data$Category=='Configuration' | data$Category=='Minibase'),]
+
+# Prepare data
+vis6 <- vis6 %>% 
+  
+  # get the number of fixations on each brick by participant - and change it to numeric
+  group_by(participantID, block, Category) %>% 
+  summarise(total_duration = sum(duration_ms)) %>% 
+  mutate(total_duration = as.numeric(total_duration)) %>% 
+  
+  # Calculate the mean and se for each category in each block
+  group_by(block, Category) %>%
+  summarise(MEAN = mean(total_duration),  # calculates the mean of each group
+            SE = sd(total_duration)/sqrt(n())) # calculates the standard error of each group
+  
+# Run the plot
+ggplot(vis6, aes(x = Category, y = MEAN, fill = Category)) +
+  geom_col(position="dodge", color = "black") + 
+  scale_fill_manual("Category", values = c(
+    "1transparent" = "white", 
+    "2DarkRed" = "darkred", 
+    "3Orange" = "orange", 
+    "4Red" = "red", 
+    "4YellowRound" = "yellow")) +
+  facet_wrap(~ block) + 
+  theme_bw() +
+  geom_errorbar(aes(ymin=MEAN-SE, ymax=MEAN+SE), size=.3, width=.2, position=position_dodge(.9)) + 
+  
+  # Change layout
+  theme(
+    # Remove grids behind the bars
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    # Draw black line around the plot
+    axis.line = element_line(colour = "black")) +
+  
+  # Add labels
+  labs(title = "Plot 6", subtitle = "The total interaction duration with each brick category across the three blocks") + 
+  xlab("") + ylab("Total interaction duration (ms)")
+
+# save plot
+ggsave("../plots/plot6.png", width = 7, height = 4)
+
+```
+
+
+### (Plot 7) Mean interaction time
+What is the mean interaction duration on each brick category across blocks?
+```{r}
+
+# Drop rows with the categories Base, Configuration and Minibase
+vis7 <-data[!(data$Category=='Base' | data$Category=='Configuration' | data$Category=='Minibase'),]
+
+# Prepare data
+vis7 <- vis7 %>% 
+  
+  # get the number of fixations on each brick by participant - and change it to numeric
+  group_by(participantID, block, Category) %>% 
+  summarise(mean_duration = mean(duration_ms)) %>% 
+  mutate(mean_duration = as.numeric(mean_duration)) %>% 
+  
+  # Calculate the mean and se for each category in each block
+  group_by(block, Category) %>%
+  summarise(MEAN = mean(mean_duration),  # calculates the mean of each group
+            SE = sd(mean_duration)/sqrt(n())) # calculates the standard error of each group
+  
+# Run the plot
+ggplot(vis7, aes(x = Category, y = MEAN, fill = Category)) +
+  geom_col(position="dodge", color = "black") + 
+  scale_fill_manual("Category", values = c(
+    "1transparent" = "white", 
+    "2DarkRed" = "darkred", 
+    "3Orange" = "orange", 
+    "4Red" = "red", 
+    "4YellowRound" = "yellow")) +
+  facet_wrap(~ block) + 
+  theme_bw() +
+  geom_errorbar(aes(ymin=MEAN-SE, ymax=MEAN+SE), size=.3, width=.2, position=position_dodge(.9)) + 
+  
+  # Change layout
+  theme(
+    # Remove grids behind the bars
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    # Draw black line around the plot
+    axis.line = element_line(colour = "black")) +
+  
+  # Add labels
+  labs(title = "Plot 7", subtitle = "The mean interaction duration with the bricks across the three blocks") + 
+  xlab("") + ylab("Mean interaction duration (ms)")
+
+# save plot
+ggsave("../plots/plot7.png", width = 7, height = 4)
+
+```
+
+
+## Modelling
+
+__The hypothesis__
+In the beginning, the kids will look more at the 4 yellow round brick and the transparent – because they attract attention when building a car. Afterwards they are used to them and will switch to look more at the other categories.
+-	Add predictor with the number of bricks in the same category.
+
+I run the following model
+> total_duration ~ 1 + bricks + Category + Category:block + (1|participantID)
+
+The total duration is predicted from the number of items in the given category, the category as well as an interaction effect between category and block. The number of items in each category might influence the fixation duration. We are not interested in this potential effect but want to account for it. The category might also influence the fixation duration. Finally, there might be an interaction effect between the block and the category - and this is the effect we are interested in. It could be that the total fixation duration in one catgeory decreases over across blocks while it increases for another category.
+
+```{r}
+
+# Apply the function to the data. Now, the data only contains rows where the behavior starts with "l".
+data = SubsetByLetter(dataAll)
+
+# Change variable to factors
+data <- data %>% mutate(
+  behavior = as.factor(behavior),
+  Category = as.factor(behavioral_category), 
+  participantID = as.factor(participantID),
+  block = as.integer(block)
+)
+
+# Drop rows with the categories Base, Configuration and Minibase
+data <-data[!(data$Category=='Base' | data$Category=='Configuration' | data$Category=='Minibase'),]
+
+# Prepare data
+data <- data %>% 
+  
+  # get the number of fixations on each brick by participant - and change it to numeric
+  group_by(participantID, block, Category) %>% 
+  summarise(total_duration = sum(duration_ms)) %>% 
+  mutate(total_duration = as.numeric(total_duration)) 
+
+# Extract number of bricks in each category and change to integer
+data$bricks <- stringr::str_extract(data$Category, "^.{1}")
+data$bricks <- as.integer(data$bricks)
+
+# Run model
+model <- lmer(total_duration ~ 1 + bricks + Category + Category:block + (1|participantID), data = data)
+summary(model)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

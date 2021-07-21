@@ -1,0 +1,113 @@
+---
+title: "clean_boris_files"
+author: "Aske Svane Qvist"
+date: "15 April 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Gather Boris Files
+
+In this script, all boris output files will be cleaned up and gathered in a single csv-file. Redundant columns will be dropped and participantID and block number from the filename will be added to columns in the dataframe. These correspond to the participantID and block columns in the 'pupil_cleaned' file and will thus enable merging the data. The final dataframe will be saved as 'boris_cleaned.csv' in the folder 'gathered_files'.
+
+## Import packages
+```{r}
+# Use pacman to import necessary packages
+library(pacman)
+p_load(janitor, tidyverse, stringi)
+
+```
+
+## Gather files
+This chunk will loop over every csv-file, tidy up the data, and gather all relevant information in one tibble called 'data_clean'. The loop will take a list of filenames (of every Boris file). For every filename, the corresponding file will be imported, participantID and block extracted, the first empty top rows will be dropped, appropriate column names will be given, and only the relevant columns kept. The cleaned tidy data will be appended to a tibble 'data_clean' outside the loop.
+
+```{r}
+
+# define filepath and get a list of files in he folder.
+path <- "../data/Boris_raw_data/"
+filenames_boris <- list.files(path = path, pattern = ".csv")
+
+# Create empty 'container' to which the cleaned data from each file will be appended.
+data_clean <- tibble()
+
+# Loop over all files in the folder, clean and tidy it, and combine into one great dataframe.
+# The loop one time per file in the folder.
+for (i in 1:length(filenames_boris)){
+  
+  # Get the filename
+  filename <- filenames_boris[i]
+  
+  # Get participantID and block from the filename. 
+  # regmatches() and regexpr() are functions working with regular expressions. The code will take the first number(s)
+  # appearing in a string. If the filename is "Part19_build2.csv", '19' will be extracted.
+  participantID <- as.numeric(regmatches(filename, regexpr("[0-9]*[0-9]", filename)))
+  # stri_extract_last_regex() is also a function working with regular expressions. The function will extract the last
+  # number in a string.  If the filename is "Part19_build2.csv", '2' will be extracted.
+  block <- as.numeric(stri_extract_last_regex(filename, "\\d{1}"))
+  
+  # Import data from filename. The filename and the path is pasted together.
+  filepath = paste(path, filename, sep = "")
+  boris <- read_csv(filepath)
+  
+  # Remove the empty spaces in the first 14 rows
+  boris <- boris[-c(1:14), ] 
+  
+  # clean up and tidy the data.
+  boris <- boris %>% 
+    
+    # Make the row with column names into actual column names.
+    row_to_names(row_number = 1) %>% 
+    
+    # Create ID and block columns
+    mutate(
+      participantID = participantID,
+      block = block) %>% 
+    
+    # Drop unnecessary columns
+    select(1,3,4,6,7,9:11) %>% # dropped columns: 'Media file path', 'Subject', and 'Comment'.
+
+    # Rename column names (all column names should be written with small)
+    rename(
+      time = Time,
+      behavior = Behavior,
+      status = Status
+    )
+
+  # Rename the column names; change spaces " " to underscores "_".
+  names(boris)[names(boris) == "Total length"] <- "total_length"
+  names(boris)[names(boris) == "Behavioral category"] <- "behavioral_category"
+  
+  # Combine with premade empty dataframe. The data will be appended under the already appended data.
+  if (nrow(data_clean) == 0) {
+    data_clean <- boris}
+  else {
+    data_clean <- rbind(data_clean, boris)}
+  
+}
+
+```
+
+
+## Overview, write to csv and clean environment
+```{r}
+
+# Quick overview to spot potential mistakes
+summary <- data_clean %>% 
+  group_by(participantID, block) %>% 
+  summarise(fixations = n())
+
+# save as csv file called 'boris_cleaned.csv'
+write_csv(data_clean,"../data/gathered_files/boris_cleaned.csv")
+
+# remove temporary loop objects from the environment
+rm(boris, block, filename, filenames_boris, filepath, i, participantID, path, summary, data_clean)
+
+
+```
+
+
+

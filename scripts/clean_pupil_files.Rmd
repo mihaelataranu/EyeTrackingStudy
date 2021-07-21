@@ -1,0 +1,98 @@
+---
+title: "clean_pupil_files"
+author: "Aske Svane Qvist"
+date: "15 April 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Gather Pupil Files 
+
+In this script, all the output files from the Eye-Tracker will be cleaned up and gathered in a single csv-file. Redundant columns will be dropped and participantID and block number from the filename will be added to columns in the dataframe. These correspond to the participantID and block columns in the 'boris_cleaned' file and will thus enable merging the data. The final dataframe will be saved as 'pupil_cleaned.csv' in the folder 'gathered_files'.
+
+## Packages
+```{r}
+# I use pacman to import packages
+library(pacman)
+p_load(tidyverse, stringi, janitor)
+
+```
+
+## Import pupil data
+```{r}
+# Save path to the csv files
+path <- "../data/Pupil_Labs_raw_data/"
+
+# Create list of filenames from the folder the path is directing to.
+filenames_pupil <- list.files(path = path, pattern = ".csv")
+
+# Create empty 'container' to which the cleaned data from each file will be appended.
+data_clean <- tibble()
+
+# Loop over all files in the folder, clean and tidy it, and combine into one great dataframe.
+# The loop one time per file in the folder.
+for (i in 1:length(filenames_pupil)){
+  
+  # Get filenames one at a time
+  filename <- filenames_pupil[i]
+  
+  # Get participantID and block from the filename. 
+  # regmatches() and regexpr() are functions working with regular expressions. The code will take the first number(s)
+  # appearing in a string. If the filename is "Part19_build2.csv", '19' will be extracted.
+  participantID <- as.numeric(regmatches(filename, regexpr("[0-9]*[0-9]", filename)))
+  # stri_extract_last_regex() is also a function working with regular expressions. The function will extract the last
+  # number in a string.  If the filename is "Part19_build2.csv", '2' will be extracted.
+  block <- as.numeric(stri_extract_last_regex(filename, "\\d{1}"))
+  
+  # Import data from filename. The filename and the path is pasted together.
+  filepath = paste(path, filename, sep = "")
+  pupil <- read_csv(filepath)
+  
+  # Tidy up the data
+  pupil <- pupil %>% 
+    
+    # Create ID and block columns
+    mutate(
+      participantID = participantID,
+      block = block) %>% 
+    
+    # Drop unnecessary columns and only select relevant ones
+    dplyr::select(2,3,4,5,6,7,9,15,16) %>% 
+    # Dropped columns: 'id', 'dispersion', 'method', 'gaze_point_3d_x, 
+    # 'gaze_point_3d_y', 'gaze_point_3d_z', and  'base_data'
+    
+    # Change duration to duration_ms as it is easier to understand
+    rename(duration_ms = duration)
+  
+  # append data to tibble outside the loop
+  # The data will be appended under the already appended data.
+  if (nrow(data_clean) == 0) {
+    data_clean <- pupil}
+  else {
+    data_clean <- rbind(data_clean, pupil)}
+}
+
+
+```
+
+## Overview, write to csv and clean environment
+```{r}
+# Quick overview to spot potential mistakes
+summary <- data_clean %>% 
+  group_by(participantID, block) %>% 
+  summarise(fixations = n())
+
+# save as csv file
+write_csv(data_clean,"../data/gathered_files/pupil_cleaned.csv")
+
+
+# remove temporary loop objects from the environment
+rm(pupil, block, filename, filenames_pupil, filepath, i, participantID, path, summary, data_clean)
+
+```
+
+
+

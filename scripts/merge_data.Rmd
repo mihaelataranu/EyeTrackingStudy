@@ -1,0 +1,162 @@
+---
+title: "merge_data"
+author: "Aske Svane Qvist"
+date: "20 April 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Merging The Data
+
+This script merges the gathered Boris and Pupil files, 'boris_cleaned.csv' and 'pupil_cleaned.csv' according to similar timestamps. The fixation duration from the pupil data (recorded by the eye tracker) is to be employed in the analysis together with the manually annotated features of the bricks the children are looking at and interacting with.
+
+The timestamps in the boris data are relative to each block recording while the timestamps in the pupil data are not. From the metadata export-file exported from the eye-tracker (for every block recording), the start timestamp can be obtained. By subtracting this from every fixation timestamp, the timestamps will correspond to the timestamps in the boris data. For a more extensive explanation, see https://github.com/pupil-labs/pupil/issues/1823.
+
+
+## Import packages
+```{r}
+# Import packages using pacman
+library(pacman)
+p_load(tidyverse, rjson)
+
+```
+
+## Import data
+```{r}
+# Import the cleaned boris and pupil data from the folder 'gathered_data'
+boris <- read_csv("../data/gathered_files/boris_cleaned.csv")
+pupil <- read_csv("../data/gathered_files/pupil_cleaned.csv")
+
+```
+
+## Define fucntion to extract timestamp from the export file.
+The function takes and ID number and a block number and extracts the start_time from the export_info folder. This is done by pasting an appropriate filepath together.
+```{r}
+# Function to get recording time stamp from the csv export file
+recording_start_time <- function(ID, b){
+  # path to meta data
+  meta_path <- "../data/Pupil_Labs_raw_data/export_info/"
+
+  # Get filepath 
+  meta_file <- paste(meta_path, "export_info_P", as.character(ID),"_B", as.character(b),".csv", sep = "")
+
+  # import meta-file 
+  meta <- read_csv(meta_file) %>% drop_na()
+
+  # Extract the recorded start timestamp from the metafile. It is located in the cell [15,2] with the end time.
+  # I extract inly the start time with regex
+  start_time <- as.numeric(sub(" .*$", "", meta[7,2]))
+  
+  return(start_time)
+}
+
+```
+
+
+
+## Merge all data
+Loop over every ID and block one by one
+```{r}
+
+# Make lists of unique ID's and blocks to enable looping over each ID and block one by one.
+ID_list <- unique(boris$participantID)
+
+# Create empty 'container' to which the gathered data will be appended.
+dataAll <- tibble()
+
+# Loop over every ID
+for (ID_idx in 1:length(ID_list)){
+
+  # Get iD one by one
+  ID <- ID_list[ID_idx]
+
+  # Loop over every block 1 to 3 (for each ID)
+  for (b in 1:3){
+    
+    # get data from the current ID and block
+    pupil_sub <- pupil %>% filter(participantID == ID & block == b)
+    boris_sub <- boris %>% filter(participantID == ID & block == b)
+    
+    # Get recording time stamp. This can be done using the start recording time from either the csv or the json file.
+    #start_recording <- recording_start_time(ID, b)
+    start_recording <- recording_start_time(ID, b)
+    
+    
+    # Subtract the recorded start timestamp from every timestamp in the block subset and save the new timestamp in 
+    # a column 'time_pupil'. The timestamps will then be relative to the recorded video starting at 0.
+    pupil_sub <- pupil_sub %>% 
+      mutate(time_pupil = start_timestamp - start_recording)
+    
+    # Create empty tibble for all the new merged rows
+    data_merged <- tibble()
+    
+    # Loop over every fixation for the current block of the Boris data and find the corresponding row in the pupil data 
+    # merge them and save to data_merged
+    for (i in 1:nrow(boris_sub)){
+      
+      # Get row from boris
+      row <- boris_sub[i,]
+  
+      # get the timestamp for the fixation (this timestamp is relative to every single block recording)
+      timestamp <- as.numeric(row[1,"time"])
+  
+  
+      # Calculate time difference for each time stamp in the pupil subset
+      pupil_row <- pupil_sub %>% mutate(
+        time_dif = abs(time_pupil - timestamp)
+    
+      )
+  
+      # Extract the row corresponding to the annotated fixation in boris (smallest time difference) 
+      # and drop participantID and block columns
+      pupil_row <- pupil_row[pupil_row$time_dif == min(pupil_row$time_dif),-c(8,9)]
+
+      # column bind the two dfs
+      combined <- cbind(row, pupil_row)
+  
+      #Combine with premade empty dataframe
+      if (nrow(data_merged) == 0) {
+        data_merged <- combined}
+      else {
+        data_merged <- rbind(data_merged, combined)}
+    }
+    
+    # Append the merged block data to dataAll outside the loop
+    if (nrow(dataAll) == 0){
+      dataAll <- data_merged}
+    else {
+      dataAll <- rbind(dataAll, data_merged)}
+    
+  }
+}
+
+
+
+```
+
+
+## Overview, write to csv and clean environment
+```{r}
+# Quick overview to spot potential mistakes
+summary <- dataAll %>% 
+  group_by(participantID, block) %>% 
+  summarise(n_fixations = n(),
+            boris_dur = max(time),
+            pupil_dur = max(time_pupil))
+
+# save as csv file
+write_csv(dataAll,"../data/gathered_files/dataAll_json.csv")
+
+
+# remove temporary loop objects from the environment
+rm(b, i, ID, ID_idx, ID_list, json_file, json_path, start_time, timestamp, row, timestamps, pupil_row, pupil_sub, boris_sub, combined, data_merged)
+
+```
+
+
+
+
+

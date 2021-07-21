@@ -1,0 +1,156 @@
+---
+title: "changing_timestamps"
+author: "Aske Svane Qvist"
+date: "14 April 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Participant 4, block 1
+
+## packages
+```{r}
+library(pacman)
+p_load(tidyverse, rjson)
+
+
+```
+
+
+
+## Imprt json-file
+```{r}
+# Import timestamps from the json file
+timestamps <- fromJSON(file = "../data/Pupil_Labs_raw_data/info.player/info.player_P4_B1.json")
+timestamps <- as.data.frame(timestamps)
+
+# Imoort data from pupil lab eyetracker
+pupil <- read_csv("../data/Pupil_Labs_raw_data/fixations_P4_B1.csv")
+
+# Import manually annotated information from boris
+# I need to use boris raw and not cleaned.
+boris <- read_csv("../data/Boris_cleaned/Part4_build1.csv")
+
+
+
+
+```
+
+## Create function changing timestamps from pupil to unix according to the document "transform timestamps into UNIX timestamps"
+
+The timestamps in fixations.csv are Pupil Timestamps. To convert them to UNIX timestamps you could calculate the difference between start_time_system_s and start_time_synced_s from info.player.csv, and apply that difference to the timestamps in fixations.csv.
+```{r}
+
+# The function
+pupil_to_unix_timestamp <- function(synced_timestamp, start_time_synced_s, start_time_system_s){
+  
+  # Calculate the unix timestamp
+  unix_timestamp <- as.numeric(synced_timestamp) - start_time_synced_s + start_time_system_s
+  
+  # Return value
+  return(unix_timestamp)
+  
+}
+
+
+```
+
+
+
+from 'Pupil' to 'Unix' timestamps starting at 0
+```{r}
+## Extract constants from the corresponding json file
+
+# Pupil timestamp
+start_time_synced_s <- as.numeric(timestamps[1,"start_time_synced_s"])
+# Unix timestamp
+start_time_system_s <- as.numeric(timestamps[1,"start_time_system_s"])
+
+
+# feed the function with the pupil timestamps in the column 'start_timestamps' and the constants just extracted
+pupil$start_timestamp_unix <- pupil_to_unix_timestamp(pupil$start_timestamp, start_time_synced_s, start_time_system_s)
+
+# Subtract the unix start_time_system_s stamp.
+pupil$start_timestamp_unix <- pupil$start_timestamp_unix - start_time_system_s
+
+
+```
+
+Merge the dataframes
+```{r}
+
+# Select relevant columns in pupil
+pupil_df <- pupil %>% select(2,3, 6:13,15)
+
+# Select relevant columns in boris and make appropriate column names
+boris <- boris %>% 
+  select(1:3, 5, 6, 8, 9, 11) %>%  
+  rename(
+    participantID = Part,
+    block = Build,
+    time = Time,
+    behavior = Behavior,
+    status = Status
+  )
+
+names(boris)[names(boris) == "Total length"] <- "total_length"
+names(boris)[names(boris) == "Behavioral category"] <- "behavioral_category"
+
+
+# Make empty data frame to be filled
+data <- tibble(
+  participantID = factor(), 
+  block = factor(), 
+  time = numeric(), 
+  total_length = numeric(), 
+  FPS = numeric(), 
+  behavior = factor(), 
+  behavioral_category = factor(),
+  status = numeric(), 
+  start_timestamp = numeric(),
+  duration = numeric(),
+  norm_pos_x = numeric(),
+  norm_pos_y = numeric(),
+  dispersion = numeric(),
+  confidence = numeric(),
+  method = numeric(),
+  gaze_point_3d_x = numeric(),
+  gaze_point_3d_y = numeric(),
+  gaze_point_3d_z = numeric(),
+  start_timestamp_unix = numeric(),
+  time_dif = numeric()
+)
+
+
+for (fixation in 1:nrow(boris)){
+  
+  # Get row from boris
+  row <- boris[fixation,]
+  
+  # get the timestamp for the fixation
+  timestamp <- as.numeric(row[1,"time"])
+  
+  pupil_df_extract <- pupil_df %>% mutate(
+    time_dif = abs(start_timestamp_unix - timestamp)
+    
+  )
+  # Extract the row corresponding to the manually annotated fixation
+  pupil_df_extract <- pupil_df_extract[pupil_df_extract$time_dif == min(pupil_df_extract$time_dif),]
+
+  # column bind the two dfs
+  combined <- cbind(row, pupil_df_extract)
+  
+  #Combine with premade empty dataframe
+    if (nrow(data) == 0) {
+      data <- combined}
+    else {
+      data <- rbind(data, combined)}
+}
+
+
+```
+
+
