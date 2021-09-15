@@ -32,8 +32,11 @@ __Prepare the data for analysis__<br>
 The script 'prepare_analysis.Rmd' will import the merged file 'dataAll.csv' containing both the Pupil Lab and the Boris data and prepare it for analysis and visulisations. A predefined function will be employed to filter out all rows that are not actual fixations (other behaviors). 
 
 ## Contact
-The data pre-processing as well as visualisations have been conducted by Aske Svane Qvist, research assistant on the project. If you have any comments or questions as to how the data cleaning, tidying, and visualisation have been done, feel free to contact me:
+The data pre-processing as well as visualizations have been conducted by Aske Svane Qvist under the supervision of Mihaela Taranu. 
+If you have any comments or questions as to how the data cleaning, tidying, and visualisation have been done, feel free to contact Aske:
 > __Aske Svane Qvist__<br>
 > Mail: askesvane@gmail.com<br>
 > Tlf. +45 52430411
 
+For questions relating this study, the results and their interpretation, please feel free to contact me: > __Mihaela Taranu__<br>
+> Mail: mihaela.taranu@cas.au.dk<br>
