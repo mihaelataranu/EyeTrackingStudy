@@ -36,7 +36,8 @@ The data pre-processing as well as visualizations have been conducted by Aske Sv
 If you have any comments or questions as to how the data cleaning, tidying, and visualisation have been done, feel free to contact Aske:
 > __Aske Svane Qvist__<br>
 > Mail: askesvane@gmail.com<br>
-> Tlf. +45 52430411
 
-For questions relating this study, the results and their interpretation, please feel free to contact me: > __Mihaela Taranu__<br>
+For questions regarding the study, the research questions and data interepration, please contact Mihaela
+> __Mihaela Taranu__<br>
 > Mail: mihaela.taranu@cas.au.dk<br>
+
