@@ -1,8 +1,8 @@
 # Eye-Tracking Study  
 
 ## Description
-This repository contains all scripts used to clean, wrangle, visualise, and prepare the data for subsequent analysis by Mihaela Taranu.<br>
-In the experiment, 7 children played with 14 LEGO bricks across 3 consecutive iterations. Eye tracking data were recorded with [Pupil Labs](https://pupil-labs.com/). The videos extracted from Pupil Labs were subsequently manually annotated in [Boris](https://boris.readthedocs.io/en/latest/#). Each time a new fixation was made on a different brick a new manual code was annotated. Thus, the raw data partly originates from Pupil Lab and partly from Boris. Both Pupil Lab and Boris generated a csv-file for every iteration (block) resulting in a total of 21 Boris files and 21 Pupil Lab files. As information from both the Pupil Lab and the Boris files are crucial for the study, all the files are being gathered into a single csv-file.
+This repository contains all scripts used to clean, wrangle, visualize, and prepare the data for  analysis of a study conducted by Mihaela Taranu and Richard Dewhurst in Feb 2021.<br>
+In this experiment, 7 children played with 14 LEGO bricks across 3 consecutive iterations. The children's play was recorded with mobile eye tracking [Pupil Labs](https://pupil-labs.com/). The videos extracted from Pupil Labs were subsequently manually annotated in [Boris](https://boris.readthedocs.io/en/latest/#). Each time a new fixation was made on a different brick a new manual code was annotated. Thus, the raw data partly originates from Pupil Lab and partly from Boris. Both Pupil Lab and Boris generated a csv-file for every iteration (block) resulting in a total of 21 Boris files and 21 Pupil Lab files. As information from both the Pupil Lab and the Boris files are the scope for the study, all the files are being gathered into a single csv-file.
 
 ## Repository structure and files
 This repository has the following directory structure:
